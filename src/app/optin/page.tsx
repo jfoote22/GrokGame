@@ -1,18 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/hooks/useAuth";
-import Header from "@/components/Header";
-import OptinMap from "@/components/OptinMap";
-import ModularInfoPanel from "@/components/ModularInfoPanel";
-import React from "react";
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
+import Header from '@/components/Header';
+import ModularInfoPanel from '@/components/ModularInfoPanel';
+import OptinMap from '@/components/OptinMap';
+import {
+  shareUserLocation,
+  stopSharingLocation,
+  saveUserProfile,
+  listenForNearbyUsers,
+  updateUserOnlineStatus,
+  cleanupOfflineUsers
+} from '@/lib/firebase/locationUtils';
 
 export interface OptinUser {
   id: string;
   location: { lat: number; lng: number };
   isOnline: boolean;
   lastSeen: Date;
+  distance?: number;
+  displayName?: string;
   modularInfo: {
     hobbies?: string[];
     relationshipGoals?: string[];
@@ -34,13 +43,15 @@ export interface OptinUser {
 export default function OptinPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const locationUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // User's current location and info
+  // Location state
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocationSharing, setIsLocationSharing] = useState(false);
-  const [locationError, setLocationError] = useState<string>("");
+  const [locationError, setLocationError] = useState("");
 
-  // Modular information state
+  // User profile state
   const [modularInfo, setModularInfo] = useState({
     hobbies: [] as string[],
     relationshipGoals: [] as string[],
@@ -50,7 +61,7 @@ export default function OptinPage() {
     interests: [] as string[]
   });
 
-  // Privacy toggles (default to all off - privacy first)
+  // Privacy settings
   const [privacySettings, setPrivacySettings] = useState({
     showHobbies: false,
     showRelationshipGoals: false,
@@ -60,9 +71,10 @@ export default function OptinPage() {
     showInterests: false
   });
 
-  // Nearby users (mock data for now)
+  // Real-time nearby users (no more mock data!)
   const [nearbyUsers, setNearbyUsers] = useState<OptinUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<OptinUser | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Filter settings
   const [filters, setFilters] = useState({
@@ -79,45 +91,45 @@ export default function OptinPage() {
   const filteredUsers = React.useMemo(() => {
     if (!filtersEnabled) return nearbyUsers;
     
-    return nearbyUsers.filter(user => {
+    return nearbyUsers.filter(nearbyUser => {
       // Age range filter
-      if (filters.ageRanges.length > 0 && user.privacy.showAgeRange) {
-        if (!user.modularInfo.ageRange || !filters.ageRanges.includes(user.modularInfo.ageRange)) {
+      if (filters.ageRanges.length > 0 && nearbyUser.privacy.showAgeRange) {
+        if (!nearbyUser.modularInfo.ageRange || !filters.ageRanges.includes(nearbyUser.modularInfo.ageRange)) {
           return false;
         }
       }
       
       // Mood filter
-      if (filters.moods.length > 0 && user.privacy.showCurrentMood) {
-        if (!user.modularInfo.currentMood || !filters.moods.includes(user.modularInfo.currentMood)) {
+      if (filters.moods.length > 0 && nearbyUser.privacy.showCurrentMood) {
+        if (!nearbyUser.modularInfo.currentMood || !filters.moods.includes(nearbyUser.modularInfo.currentMood)) {
           return false;
         }
       }
       
       // Availability filter
-      if (filters.availability.length > 0 && user.privacy.showAvailability) {
-        if (!user.modularInfo.availability || !filters.availability.includes(user.modularInfo.availability)) {
+      if (filters.availability.length > 0 && nearbyUser.privacy.showAvailability) {
+        if (!nearbyUser.modularInfo.availability || !filters.availability.includes(nearbyUser.modularInfo.availability)) {
           return false;
         }
       }
       
       // Hobbies filter (user must have at least one matching hobby)
-      if (filters.hobbies.length > 0 && user.privacy.showHobbies) {
-        if (!user.modularInfo.hobbies || !user.modularInfo.hobbies.some(hobby => filters.hobbies.includes(hobby))) {
+      if (filters.hobbies.length > 0 && nearbyUser.privacy.showHobbies) {
+        if (!nearbyUser.modularInfo.hobbies || !nearbyUser.modularInfo.hobbies.some(hobby => filters.hobbies.includes(hobby))) {
           return false;
         }
       }
       
       // Interests filter (user must have at least one matching interest)
-      if (filters.interests.length > 0 && user.privacy.showInterests) {
-        if (!user.modularInfo.interests || !user.modularInfo.interests.some(interest => filters.interests.includes(interest))) {
+      if (filters.interests.length > 0 && nearbyUser.privacy.showInterests) {
+        if (!nearbyUser.modularInfo.interests || !nearbyUser.modularInfo.interests.some(interest => filters.interests.includes(interest))) {
           return false;
         }
       }
       
       // Relationship goals filter (user must have at least one matching goal)
-      if (filters.relationshipGoals.length > 0 && user.privacy.showRelationshipGoals) {
-        if (!user.modularInfo.relationshipGoals || !user.modularInfo.relationshipGoals.some(goal => filters.relationshipGoals.includes(goal))) {
+      if (filters.relationshipGoals.length > 0 && nearbyUser.privacy.showRelationshipGoals) {
+        if (!nearbyUser.modularInfo.relationshipGoals || !nearbyUser.modularInfo.relationshipGoals.some(goal => filters.relationshipGoals.includes(goal))) {
           return false;
         }
       }
@@ -155,25 +167,73 @@ export default function OptinPage() {
     }
   }, [loading, user, router]);
 
-  // Get user's current location
-  const getCurrentLocation = () => {
+  // Save user profile whenever it changes
+  useEffect(() => {
+    if (user) {
+      saveUserProfile(user.uid, modularInfo, privacySettings).catch(error => {
+        console.error('Error saving profile:', error);
+      });
+    }
+  }, [user, modularInfo, privacySettings]);
+
+  // Get user's current location and start sharing
+  const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported by this browser.");
       return;
     }
 
+    if (!user) {
+      setLocationError("You must be logged in to share location.");
+      return;
+    }
+
     setLocationError("");
+    
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const location = {
           lat: position.coords.latitude,
           lng: position.coords.longitude
         };
-        setCurrentLocation(location);
-        setIsLocationSharing(true);
         
-        // In a real app, you would broadcast this location to other users
-        console.log("Broadcasting location:", location);
+        try {
+          setCurrentLocation(location);
+          
+          // Save location to database
+          await shareUserLocation(
+            user.uid,
+            user.displayName,
+            user.email,
+            location
+          );
+          
+          setIsLocationSharing(true);
+          console.log("[OptinPage] Started sharing location:", location);
+          
+          // Start listening for nearby users
+          startListeningForNearbyUsers(location);
+          
+          // Set up periodic location updates (every 30 seconds)
+          locationUpdateIntervalRef.current = setInterval(async () => {
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                const newLocation = {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude
+                };
+                setCurrentLocation(newLocation);
+                await shareUserLocation(user.uid, user.displayName, user.email, newLocation);
+              },
+              (error) => console.warn('Location update failed:', error),
+              { enableHighAccuracy: false, timeout: 10000 }
+            );
+          }, 30000);
+          
+        } catch (error) {
+          console.error('Error starting location sharing:', error);
+          setLocationError('Failed to start location sharing. Please try again.');
+        }
       },
       (error) => {
         setLocationError(error.message);
@@ -188,9 +248,58 @@ export default function OptinPage() {
   };
 
   // Stop sharing location
-  const stopLocationSharing = () => {
-    setIsLocationSharing(false);
-    setCurrentLocation(null);
+  const stopLocationSharing = async () => {
+    if (!user) return;
+    
+    try {
+      // Stop listening for nearby users
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      
+      // Clear location update interval
+      if (locationUpdateIntervalRef.current) {
+        clearInterval(locationUpdateIntervalRef.current);
+        locationUpdateIntervalRef.current = null;
+      }
+      
+      // Update database
+      await stopSharingLocation(user.uid);
+      
+      setIsLocationSharing(false);
+      setCurrentLocation(null);
+      setNearbyUsers([]);
+      console.log("[OptinPage] Stopped sharing location");
+      
+    } catch (error) {
+      console.error('Error stopping location sharing:', error);
+      setLocationError('Failed to stop location sharing.');
+    }
+  };
+
+  // Start listening for nearby users
+  const startListeningForNearbyUsers = (location: { lat: number; lng: number }) => {
+    if (!user) return;
+    
+    setIsLoadingUsers(true);
+    
+    // Stop any existing listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+    
+    // Start new listener
+    unsubscribeRef.current = listenForNearbyUsers(
+      user.uid,
+      location,
+      10, // 10km radius
+      (users) => {
+        setNearbyUsers(users);
+        setIsLoadingUsers(false);
+        console.log(`[OptinPage] Updated nearby users: ${users.length} found`);
+      }
+    );
   };
 
   // Toggle privacy setting
@@ -210,8 +319,8 @@ export default function OptinPage() {
   };
 
   // Center map on user location and select them
-  const centerMapOnUser = (user: OptinUser) => {
-    setSelectedUser(user);
+  const centerMapOnUser = (nearbyUser: OptinUser) => {
+    setSelectedUser(nearbyUser);
     // Scroll to the map section smoothly
     document.querySelector('.lg\\:col-span-2')?.scrollIntoView({ 
       behavior: 'smooth',
@@ -219,67 +328,37 @@ export default function OptinPage() {
     });
   };
 
-  // Mock function to simulate finding nearby users
+  // Cleanup on unmount
   useEffect(() => {
-    if (isLocationSharing && currentLocation) {
-      // Simulate nearby users (in a real app, this would come from a real-time database)
-      const mockUsers: OptinUser[] = [
-        {
-          id: "user1",
-          location: { 
-            lat: currentLocation.lat + 0.001, 
-            lng: currentLocation.lng + 0.001 
-          },
-          isOnline: true,
-          lastSeen: new Date(),
-          modularInfo: {
-            hobbies: ["hiking", "photography"],
-            relationshipGoals: ["friendship", "networking"],
-            ageRange: "20s",
-            currentMood: "🌟",
-            availability: "open to chat",
-            interests: ["tech", "art"]
-          },
-          privacy: {
-            showHobbies: true,
-            showRelationshipGoals: true,
-            showAgeRange: true,
-            showCurrentMood: true,
-            showAvailability: true,
-            showInterests: false
-          }
-        },
-        {
-          id: "user2",
-          location: { 
-            lat: currentLocation.lat - 0.002, 
-            lng: currentLocation.lng + 0.003 
-          },
-          isOnline: true,
-          lastSeen: new Date(),
-          modularInfo: {
-            hobbies: ["cooking", "reading"],
-            relationshipGoals: ["dating"],
-            ageRange: "30s",
-            currentMood: "☕",
-            availability: "busy",
-            interests: ["books", "food"]
-          },
-          privacy: {
-            showHobbies: true,
-            showRelationshipGoals: false,
-            showAgeRange: true,
-            showCurrentMood: true,
-            showAvailability: true,
-            showInterests: true
-          }
-        }
-      ];
-      setNearbyUsers(mockUsers);
-    } else {
-      setNearbyUsers([]);
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+      if (locationUpdateIntervalRef.current) {
+        clearInterval(locationUpdateIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Mark user as online when component mounts and offline when unmounting
+  useEffect(() => {
+    if (user && isLocationSharing) {
+      updateUserOnlineStatus(user.uid, true);
+      
+      return () => {
+        updateUserOnlineStatus(user.uid, false);
+      };
     }
-  }, [isLocationSharing, currentLocation]);
+  }, [user, isLocationSharing]);
+
+  // Periodic cleanup of offline users (every 2 minutes)
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      cleanupOfflineUsers();
+    }, 2 * 60 * 1000);
+    
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   if (loading) {
     return (
@@ -333,7 +412,7 @@ export default function OptinPage() {
                     </span>
                   </div>
                   <div className="text-gray-400">
-                    {nearbyUsers.length} people nearby
+                    {isLoadingUsers ? 'Loading...' : `${nearbyUsers.length} people nearby`}
                   </div>
                 </div>
               </div>
