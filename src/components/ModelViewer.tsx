@@ -146,7 +146,7 @@ export default function ModelViewer({ glbUrl, alt = "3D Model", poster, height =
 
     // Cleanup on unmount
     return () => {
-      // Don't remove the script on unmount since it might be used by other instances
+      // Don&rsquo;t remove the script on unmount since it might be used by other instances
       // Instead, just clean up the container
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
@@ -282,7 +282,7 @@ export default function ModelViewer({ glbUrl, alt = "3D Model", poster, height =
             {errorDetails && (
               <div className="mt-2 p-2 bg-gray-800 rounded text-left max-w-full overflow-x-auto">
                 <p className="text-xs text-gray-300 break-all">{errorDetails}</p>
-                <p className="text-xs text-gray-400 mt-1">Model URL: <span className="text-gray-300 break-all">{glbUrl || "None"}</span></p>
+                <p className="text-xs text-gray-400 mt-1">Model URL: <span className="text-gray-300 break-all">{glbUrl || 'None'}</span></p>
               </div>
             )}
           </div>

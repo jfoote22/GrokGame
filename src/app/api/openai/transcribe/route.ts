@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import OpenAI from "openai";
 
-const openai = new OpenAI();
+// Force dynamic rendering to prevent build-time evaluation
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const openai = new OpenAI();
   const body = await req.json();
 
   const base64Audio = body.audio;

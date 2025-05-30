@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Force dynamic rendering since this route uses request parameters
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);

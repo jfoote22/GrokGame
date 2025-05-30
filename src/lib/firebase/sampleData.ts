@@ -6,6 +6,7 @@ export const sampleCoupons: Omit<Coupon, 'id'>[] = [
   {
     name: "Summer Sale - 25% OFF",
     description: "Get 25% off all summer items throughout the season!",
+    rarity: "common",
     discount: "25% OFF",
     startDate: new Date("2023-06-01"),
     endDate: new Date("2023-08-31"),
@@ -18,6 +19,7 @@ export const sampleCoupons: Omit<Coupon, 'id'>[] = [
   {
     name: "Buy One Get One Free - Coffee",
     description: "Purchase any coffee and get a second one of equal or lesser value for free!",
+    rarity: "rare",
     discount: "BOGO",
     startDate: new Date("2023-07-15"),
     endDate: new Date("2023-07-31"),
@@ -30,6 +32,7 @@ export const sampleCoupons: Omit<Coupon, 'id'>[] = [
   {
     name: "Weekend Discount - 15% OFF",
     description: "Save 15% on all purchases during weekends!",
+    rarity: "common",
     discount: "15% OFF",
     startDate: new Date("2023-07-01"),
     endDate: new Date("2023-12-31"),

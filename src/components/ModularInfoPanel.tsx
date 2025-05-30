@@ -413,7 +413,7 @@ export default function ModularInfoPanel({
           You're sharing {Object.values(privacySettings).filter(Boolean).length} out of 6 possible information types.
           {!isLocationSharing && (
             <div className="text-yellow-400 mt-1">
-              ⚠️ Location sharing is disabled - you won't appear on the map.
+              ⚠️ Location sharing is disabled - you won&rsquo;t appear on the map.
             </div>
           )}
         </div>

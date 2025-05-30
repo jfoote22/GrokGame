@@ -37,7 +37,7 @@ export default function FirebaseSetupGuide({ initialTab = 'firestore' }: Firebas
       {activeTab === 'firestore' && (
         <div>
           <p className="text-sm text-gray-300 mb-3">
-            Your Firestore security rules might be too restrictive. Go to the Firebase Console, navigate to Firestore Database, and click on the "Rules" tab. Update your rules to include:
+            Your Firestore security rules might be too restrictive. Go to the Firebase Console, navigate to Firestore Database, and click on the &ldquo;Rules&rdquo; tab. Update your rules to include:
           </p>
           
           <div className="bg-gray-900 p-3 rounded-md overflow-x-auto mb-4">
@@ -61,7 +61,7 @@ service cloud.firestore {
           </div>
           
           <p className="text-sm text-gray-300 mb-2">
-            After updating the rules, click "Publish" to apply the changes. Then refresh this page and try again.
+            After updating the rules, click &ldquo;Publish&rdquo; to apply the changes. Then refresh this page and try again.
           </p>
         </div>
       )}
@@ -74,10 +74,10 @@ service cloud.firestore {
           
           <ol className="list-decimal list-inside space-y-2 text-sm text-gray-300 mb-4">
             <li>Go to the Firebase Console and select your project</li>
-            <li>Navigate to "Authentication" from the left sidebar</li>
-            <li>Click on the "Sign-in method" tab</li>
-            <li>Enable "Google" as a sign-in provider</li>
-            <li>Add your domain to the "Authorized domains" list if you're hosting the app on a custom domain</li>
+            <li>Navigate to &ldquo;Authentication&rdquo; from the left sidebar</li>
+            <li>Click on the &ldquo;Sign-in method&rdquo; tab</li>
+            <li>Enable &ldquo;Google&rdquo; as a sign-in provider</li>
+            <li>Add your domain to the &ldquo;Authorized domains&rdquo; list if you&rsquo;re hosting the app on a custom domain</li>
           </ol>
           
           <p className="text-sm text-gray-300">
@@ -89,7 +89,7 @@ service cloud.firestore {
       {activeTab === 'storage' && (
         <div>
           <p className="text-sm text-gray-300 mb-3">
-            If you're using Firebase Storage for images or files, make sure your storage rules allow authenticated users to read and write:
+            If you&rsquo;re using Firebase Storage for images or files, make sure your storage rules allow authenticated users to read and write:
           </p>
           
           <div className="bg-gray-900 p-3 rounded-md overflow-x-auto mb-4">
