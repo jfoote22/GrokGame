@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import AuthDebug from '@/components/AuthDebug';
 
 export default function Login() {
   const { user, signIn, loading } = useAuth();
@@ -98,6 +99,9 @@ export default function Login() {
           </p>
         </div>
       </div>
+      
+      {/* Temporary debug component - remove after fixing */}
+      <AuthDebug />
     </div>
   );
 } 
