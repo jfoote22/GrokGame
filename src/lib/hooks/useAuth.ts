@@ -1,4 +1,4 @@
-import { useContext } from "react";
-import { AuthContext } from "../contexts/AuthContext";
+"use client";
 
-export const useAuth = () => useContext(AuthContext);
+// Re-export the hook from the context file
+export { useAuth } from '../contexts/AuthContext';

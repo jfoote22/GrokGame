@@ -1,37 +1,62 @@
 import { NextResponse } from "next/server";
-import Replicate from "replicate";
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN,
-});
-
-export async function POST(request: Request) {
-  if (!process.env.REPLICATE_API_TOKEN) {
-    throw new Error(
-      "The REPLICATE_API_TOKEN environment variable is not set. See README.md for instructions on how to set it."
-    );
-  }
-
-  const { prompt } = await request.json();
-
+export async function POST(req: Request) {
   try {
-    const output = await replicate.run(
-      "stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf",
-      {
+    const { prompt } = await req.json();
+
+    if (!prompt) {
+      return NextResponse.json(
+        { error: "Prompt is required" },
+        { status: 400 }
+      );
+    }
+
+    const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+    if (!REPLICATE_API_TOKEN) {
+      return NextResponse.json(
+        { error: "Replicate API token is not configured" },
+        { status: 500 }
+      );
+    }
+
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${REPLICATE_API_TOKEN}`,
+      },
+      body: JSON.stringify({
+        // Use a standard SDXL model that's publicly available
+        version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
         input: {
           prompt: prompt,
-          image_dimensions: "512x512",
+          negative_prompt: "low quality, bad anatomy, blurry, pixelated, disfigured",
+          width: 768,
+          height: 768,
           num_outputs: 1,
-          num_inference_steps: 50,
+          num_inference_steps: 25,
           guidance_scale: 7.5,
-          scheduler: "DPMSolverMultistep",
+          scheduler: "K_EULER",
         },
-      }
-    );
+      }),
+    });
 
-    return NextResponse.json({ output }, { status: 200 });
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Replicate API error:", error);
+      return NextResponse.json(
+        { error: error.detail || "Error generating image" },
+        { status: response.status }
+      );
+    }
+
+    const prediction = await response.json();
+    return NextResponse.json(prediction);
   } catch (error) {
-    console.error("Error from Replicate API:", error);
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    console.error("Error generating image:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
